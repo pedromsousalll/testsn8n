@@ -1,0 +1,170 @@
+{
+  "name": "Chat Presentation Agent (Ad Board + Marketing)",
+  "meta": {
+    "templateId": "custom_chat_presentation_agent"
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "initialMessages": "Hi! Tell me what you need and I’ll generate either an ad board presentation or a marketing presentation.\nExamples: \"Ad board for a 3-day flash sale\" or \"Marketing deck for Q1 growth strategy\""
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0d56c8fd-7d8b-4ad6-9c47-4d4c8c77e9b3",
+      "name": "When chat message received",
+      "webhookId": "8d4be8b5-35b8-4f9f-8db6-3f4d3a8dfbd7"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "baseURL": "={{ $env.GITHUB_MODELS_BASE_URL || \"\" }}",
+          "responsesApiEnabled": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        240
+      ],
+      "id": "3b927e50-8f6b-4a6a-9139-b3f6e7c3e0aa",
+      "name": "OpenAI Model",
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        520,
+        240
+      ],
+      "id": "77a2c8df-f5c4-4ef2-b2d8-8d7b0dbb5c93",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "You are a presentation-building agent embedded in n8n.\n\nYou have exactly two tools (skills):\n1) Ad_Board_Presentation: OOH/DOOH, billboards, transit, signage, retail boards.\n2) Marketing_Presentation: strategy, campaign plan, GTM, pitch, quarterly plans.\n\nSelection policy (choose ONE tool):\n- If the user mentions ad boards/OOH/placements/flighting/specs/short-copy/legibility, call Ad_Board_Presentation.\n- If the user mentions strategy/GTM/campaign plan/channel mix/budget/KPIs/reporting, call Marketing_Presentation.\n- If ambiguous: ask up to 3 clarifying questions, then proceed with reasonable defaults.\n\nClarifying questions (max 3): objective, audience (who the deck is for), constraints (slide count/tone/locale/deadline).\nDefaults if missing: 8–10 slides, professional tone, plain text + speaker notes.\n\nOutput rules (always):\n- Slide-by-slide outline (Slide 1..N) with titles + 3–6 bullets per slide.\n- Speaker notes per slide (1–3 short paragraphs).\n- Append: Assets checklist + Next steps.\n\nQuality + safety: be specific, avoid filler, do not invent facts/benchmarks. Do not invent brand assets (logos/colors/fonts/legal). Use explicit PLACEHOLDERs and request missing assets."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        320,
+        0
+      ],
+      "id": "f6db8b2b-35d6-4d67-9b28-2f8d0a3c5a6a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "description": "Generate an OOH/ad-board presentation outline. Optimize for distance viewing and short-copy (3-second rule). Prefer 6–8 slides. Include: objective/audience, message strategy, concept variants (A/B/C), placements + flighting, measurement plan, assets checklist + next steps.\n\nBrief inputs (compact): product/offer, city/locations + placement types, dates/flighting, audience context (commute/shopping/events), brand tone (if any), format constraints/specs (if known).\n\nDo not invent brand assets; use explicit PLACEHOLDERs.",
+        "language": "javaScript",
+        "jsCode": "const input = typeof query === 'string' ? query : JSON.stringify(query);\n\nfunction section(title, bullets) {\n  return `## ${title}\\n${bullets.map(b => `- ${b}`).join('\\n')}`;\n}\n\nconst slides = [\n  {\n    t: '1) Title / Campaign Snapshot',\n    b: [\n      'Campaign name + one-line promise',\n      'Brand + product/offer',\n      'Dates + primary locations/placements',\n      'Primary KPI (awareness, footfall, promo redemptions, etc.)',\n    ],\n  },\n  {\n    t: '2) Objective & Audience',\n    b: [\n      'Objective (what changes in the real world?)',\n      'Primary audience + context (commute, shopping, events)',\n      'Key insight / tension',\n      'What we want them to do next',\n    ],\n  },\n  {\n    t: '3) Message Strategy (3-Second Rule)',\n    b: [\n      'Single core message (<= 7 words)',\n      'Supporting line (optional)',\n      'Reason-to-believe (short)',\n      'CTA (QR / URL / store / app)',\n    ],\n  },\n  {\n    t: '4) Creative System (Board Specs)',\n    b: [\n      'Logo placement + safe area',\n      'Hierarchy: Headline > visual > CTA',\n      'Contrast & legibility guidance',\n      'Localization rules (city/offer/date)',\n    ],\n  },\n  {\n    t: '5) Board Concepts (A/B/C)',\n    b: [\n      'Concept A: headline + visual direction + CTA',\n      'Concept B: headline + visual direction + CTA',\n      'Concept C: headline + visual direction + CTA',\n      'Notes on when to use each concept',\n    ],\n  },\n  {\n    t: '6) Placement & Flighting',\n    b: [\n      'Placement types (billboard, transit, retail, digital)',\n      'Dayparting / rotation plan (if DOOH)',\n      'Geos + rationale (high intent / high traffic)',\n      'Contingencies (weather, supply, approvals)',\n    ],\n  },\n  {\n    t: '7) Measurement Plan',\n    b: [\n      'What we’ll measure (reach, frequency, lift)',\n      'Methods (QR scans, store lift, geo-exposed tests)',\n      'Reporting cadence',\n      'Success thresholds',\n    ],\n  },\n  {\n    t: '8) Assets Checklist & Next Steps',\n    b: [\n      'Files: layered source, exports per format, legal lines',\n      'Approvals: brand, legal, media owner specs',\n      'Production timeline',\n      'Next steps: finalize copy, design, trafficking, QA',\n    ],\n  },\n];\n\nlet out = `You asked for an ad-board presentation.\\n\\nBrief received:\\n${input}\\n\\n`;\n\nfor (const s of slides) {\n  out += section(s.t, s.b) + '\\n\\n';\n  out += `Speaker notes: Keep each point punchy and optimized for OOH viewing distance. Confirm sizes/specs with media owner.\\n\\n`;\n}\n\nreturn out;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        -80
+      ],
+      "id": "c3c9c87f-74e8-4fdf-8f32-9c6a9a2d4b23",
+      "name": "Ad_Board_Presentation"
+    },
+    {
+      "parameters": {
+        "description": "Generate a marketing strategy/campaign/GTM presentation outline. Prefer 8–12 slides. Must include: exec summary, context/problem, audience/insight, positioning/messaging, plan + channel mix, timeline/milestones, measurement (KPIs), (optional) budget/resourcing, next steps.\n\nBrief inputs (compact): product, target audience/segments, goal (growth/pipeline/retention/launch), constraints (budget/timeline/must-use channels), region/locale, existing performance data (if any).\n\nDo not invent benchmarks or brand assets; label assumptions and use explicit PLACEHOLDERs.",
+        "language": "javaScript",
+        "jsCode": "const input = typeof query === 'string' ? query : JSON.stringify(query);\n\nfunction section(title, bullets) {\n  return `## ${title}\\n${bullets.map(b => `- ${b}`).join('\\n')}`;\n}\n\nconst slides = [\n  {\n    t: '1) Title / Executive Summary',\n    b: [\n      'What we’re presenting (campaign/plan)',\n      'Who it’s for + timeframe',\n      'The single most important outcome',\n    ],\n  },\n  {\n    t: '2) Context & Problem',\n    b: [\n      'Market / customer context (1-2 facts)',\n      'Primary challenge or opportunity',\n      'Why now (timing, trend, trigger)',\n    ],\n  },\n  {\n    t: '3) Audience & Insight',\n    b: [\n      'Primary segments + jobs-to-be-done',\n      'Key insight that changes strategy',\n      'Barriers to conversion + motivators',\n    ],\n  },\n  {\n    t: '4) Positioning & Messaging',\n    b: [\n      'Value proposition (one sentence)',\n      'Message pillars (3)',\n      'Proof points / RTBs',\n      'CTA & offer (if applicable)',\n    ],\n  },\n  {\n    t: '5) Strategy & Plan (High Level)',\n    b: [\n      'Approach (acquire/activate/retain)',\n      'Campaign theme + creative idea',\n      'Funnel mapping (awareness → conversion)',\n      'Assumptions & risks',\n    ],\n  },\n  {\n    t: '6) Channel Mix & Tactics',\n    b: [\n      'Paid: search/social/programmatic (where/why)',\n      'Owned: email/site/product (how we leverage)',\n      'Earned/partners: PR, creators, affiliates',\n      'Experiments: 2-3 test ideas + hypotheses',\n    ],\n  },\n  {\n    t: '7) Timeline & Milestones',\n    b: [\n      'Phases (prep, launch, optimize, wrap)',\n      'Key deliverables per phase',\n      'Dependencies (creative, tracking, approvals)',\n      'Weekly cadence',\n    ],\n  },\n  {\n    t: '8) Measurement (KPIs) & Reporting',\n    b: [\n      'North-star metric + supporting KPIs',\n      'Attribution approach (what we can/can’t claim)',\n      'Dashboards + reporting schedule',\n      'Definition of success',\n    ],\n  },\n  {\n    t: '9) Budget & Resourcing (Optional)',\n    b: [\n      'Budget allocation by channel',\n      'Expected ranges for CAC/CPA (if known)',\n      'Team roles and owners',\n      'External vendors/tools',\n    ],\n  },\n  {\n    t: '10) Next Steps',\n    b: [\n      'Decisions needed (2-4)',\n      'Immediate actions (this week)',\n      'Risks to mitigate',\n      'Kickoff date',\n    ],\n  },\n];\n\nlet out = `You asked for a marketing presentation.\\n\\nBrief received:\\n${input}\\n\\n`;\n\nfor (const s of slides) {\n  out += section(s.t, s.b) + '\\n\\n';\n  out += `Speaker notes: Tie each slide back to goals and audience. Keep it decision-oriented and include measurable outcomes.\\n\\n`;\n}\n\nout += section('Assets checklist', [\n  'Brand guidelines + logo pack',\n  'Product screenshots / UI flows',\n  'Proof points (stats, testimonials, case studies)',\n  'Tracking plan (UTMs/events) and dashboard access',\n]) + '\\n';\n\nreturn out;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        80
+      ],
+      "id": "64d48a71-4e76-46e6-a6bb-2c8e5f6c1f18",
+      "name": "Marketing_Presentation"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ad_Board_Presentation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marketing_Presentation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false
+}
