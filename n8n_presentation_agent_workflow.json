@@ -1,5 +1,5 @@
 {
-  "name": "Chat Presentation Agent (Ad Board + Marketing)",
+  "name": "Chat Presentation Agent (Ad Board + Marketing) — Cloud (GitHub docs per request)",
   "meta": {
     "templateId": "custom_chat_presentation_agent"
   },
@@ -22,6 +22,80 @@
       "id": "0d56c8fd-7d8b-4ad6-9c47-4d4c8c77e9b3",
       "name": "When chat message received",
       "webhookId": "8d4be8b5-35b8-4f9f-8db6-3f4d3a8dfbd7"
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractText(obj) {\n  if (obj == null) return '';\n  if (typeof obj === 'string') return obj;\n  if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj);\n  if (Array.isArray(obj)) return obj.map(extractText).join(' ');\n  if (typeof obj === 'object') {\n    const keys = ['text', 'message', 'chatInput', 'input', 'query', 'prompt', 'body', 'content'];\n    for (const k of keys) {\n      if (k in obj) return extractText(obj[k]);\n    }\n    try { return JSON.stringify(obj); } catch { return ''; }\n  }\n  return '';\n}\n\nconst oohKeywords = [\n  'ooh',\n  'dooh',\n  'billboard',\n  'ad board',\n  'adboard',\n  'out of home',\n  'signage',\n  'transit',\n  'bus shelter',\n  'mupi',\n  'poster',\n  'street furniture',\n  'digital billboard',\n];\n\nreturn items.map((item) => {\n  const raw = extractText(item.json);\n  const text = (raw || '').toLowerCase();\n\n  const isOoh = oohKeywords.some((k) => text.includes(k));\n\n  const skillPath = isOoh ? 'ooh-ad-board-skill' : 'marketing-presentation-skill';\n  const skillLabel = isOoh ? 'OOH / Ad Board' : 'Marketing';\n\n  return {\n    json: {\n      ...item.json,\n      skillPath,\n      skillLabel,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "1aa2b1b0-3b4c-4a7b-9c68-2d8f0e6a4c11",
+      "name": "Route skill (OOH vs Marketing)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/' + $json.skillPath + '/references/RULES.md' }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        360,
+        0
+      ],
+      "id": "c0b6d196-2d2b-4f0f-9d8f-3a18c8f2d75c",
+      "name": "Fetch RULES.md"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/' + $json.skillPath + '/references/OUTPUT_FORMAT.md' }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        560,
+        0
+      ],
+      "id": "a4a9c0b5-7f45-4ad9-8c18-22d1cfd1bcb0",
+      "name": "Fetch OUTPUT_FORMAT.md"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/' + $json.skillPath + '/references/COMPANY_ASSETS.md' }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        760,
+        0
+      ],
+      "id": "55dd9f9c-7f1b-4e70-9b64-6f33d3c3a5c2",
+      "name": "Fetch COMPANY_ASSETS.md"
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractBody(nodeName) {\n  const nodeJson = $items(nodeName)[0]?.json ?? {};\n  return nodeJson.body ?? nodeJson.data ?? '';\n}\n\nconst rules = extractBody('Fetch RULES.md');\nconst outputFormat = extractBody('Fetch OUTPUT_FORMAT.md');\nconst assets = extractBody('Fetch COMPANY_ASSETS.md');\n\nreturn items.map((item) => {\n  const skillLabel = item.json.skillLabel || 'Marketing';\n  const skillPath = item.json.skillPath || 'marketing-presentation-skill';\n\n  const agentSystemMessage = [\n    'You are a presentation-building agent embedded in n8n.',\n    '',\n    `Selected doc set: ${skillLabel} (${skillPath})`,\n    '',\n    'You have exactly two tools (skills):',\n    '1) Ad_Board_Presentation (OOH/DOOH, billboards, transit, signage, retail boards)',\n    '2) Marketing_Presentation (strategy, campaign plan, GTM, pitch, quarterly plans)',\n    '',\n    'Use the tool that matches the user request. If unclear, ask up to 3 clarifying questions then proceed.',\n    '',\n    '---',\n    '## RULES',\n    rules,\n    '',\n    '---',\n    '## OUTPUT_FORMAT',\n    outputFormat,\n    '',\n    '---',\n    '## COMPANY_ASSETS',\n    assets,\n  ].join('\\n');\n\n  return {\n    json: {\n      ...item.json,\n      agentSystemMessage,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "4a7e2b17-74d9-4bb4-bc1b-2b47d7d1f033",
+      "name": "Build system message"
     },
     {
       "parameters": {
@@ -60,7 +134,7 @@
       "parameters": {
         "promptType": "auto",
         "options": {
-          "systemMessage": "You are a presentation-building agent embedded in n8n.\n\nYou have exactly two tools (skills):\n1) Ad_Board_Presentation: OOH/DOOH, billboards, transit, signage, retail boards.\n2) Marketing_Presentation: strategy, campaign plan, GTM, pitch, quarterly plans.\n\nSelection policy (choose ONE tool):\n- If the user mentions ad boards/OOH/placements/flighting/specs/short-copy/legibility, call Ad_Board_Presentation.\n- If the user mentions strategy/GTM/campaign plan/channel mix/budget/KPIs/reporting, call Marketing_Presentation.\n- If ambiguous: ask up to 3 clarifying questions, then proceed with reasonable defaults.\n\nClarifying questions (max 3): objective, audience (who the deck is for), constraints (slide count/tone/locale/deadline).\nDefaults if missing: 8–10 slides, professional tone, plain text + speaker notes.\n\nOutput rules (always):\n- Slide-by-slide outline (Slide 1..N) with titles + 3–6 bullets per slide.\n- Speaker notes per slide (1–3 short paragraphs).\n- Append: Assets checklist + Next steps.\n\nQuality + safety: be specific, avoid filler, do not invent facts/benchmarks. Do not invent brand assets (logos/colors/fonts/legal). Use explicit PLACEHOLDERs and request missing assets."
+          "systemMessage": "={{ $json.agentSystemMessage }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -106,6 +180,61 @@
   "pinData": {},
   "connections": {
     "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Route skill (OOH vs Marketing)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route skill (OOH vs Marketing)": {
+      "main": [
+        [
+          {
+            "node": "Fetch RULES.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RULES.md": {
+      "main": [
+        [
+          {
+            "node": "Fetch OUTPUT_FORMAT.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OUTPUT_FORMAT.md": {
+      "main": [
+        [
+          {
+            "node": "Fetch COMPANY_ASSETS.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch COMPANY_ASSETS.md": {
+      "main": [
+        [
+          {
+            "node": "Build system message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build system message": {
       "main": [
         [
           {
