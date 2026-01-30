@@ -7,7 +7,7 @@
     {
       "parameters": {
         "options": {
-          "initialMessages": "Hi! Describe what you need (OOH/ad board or marketing deck) and I’ll generate a slide outline."
+          "initialMessages": "Hi! How can I help?\n\nIf you want a presentation, tell me whether it’s (1) marketing or (2) OOH/ad board, and share the brief."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
@@ -22,14 +22,43 @@
     },
     {
       "parameters": {
-        "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/marketing-presentation-skill/references/RULES.md",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "text"
+        "jsCode": "function extractText(obj) {\n  if (obj == null) return '';\n  if (typeof obj === 'string') return obj;\n  if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj);\n  if (Array.isArray(obj)) return obj.map(extractText).join(' ');\n  if (typeof obj === 'object') {\n    const keys = ['chatInput', 'message', 'text', 'input', 'query', 'prompt', 'body', 'content'];\n    for (const k of keys) {\n      if (k in obj) return extractText(obj[k]);\n    }\n    const nestedKeys = ['data', 'payload', 'request', 'webhook', 'body', 'query'];\n    for (const nk of nestedKeys) {\n      if (nk in obj) {\n        const v = extractText(obj[nk]);\n        if (v) return v;\n      }\n    }\n    return '';\n  }\n  return '';\n}\n\nconst presentationRegex = /\\b(presentation|deck|slides?|slide outline|pitch deck|powerpoint|google slides|keynote)\\b/i;\n\nreturn items.map((item) => {\n  const chatInput = (extractText(item.json) || '').trim();\n  const needsPresentation = presentationRegex.test(chatInput);\n\n  return {\n    json: {\n      ...item.json,\n      chatInput,\n      needsPresentation,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -620,
+        0
+      ],
+      "id": "aa111111-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "name": "Route intent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needsPresentation }}",
+              "operation": "isTrue"
             }
-          }
+          ]
         }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        0
+      ],
+      "id": "bb222222-cccc-4ddd-8eee-ffffffffffff",
+      "name": "Presentation requested?"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/marketing-presentation-skill/references/RULES.md",
+        "responseFormat": "string",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -42,14 +71,10 @@
     },
     {
       "parameters": {
+        "method": "GET",
         "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/marketing-presentation-skill/references/OUTPUT_FORMAT.md",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "text"
-            }
-          }
-        }
+        "responseFormat": "string",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -62,14 +87,10 @@
     },
     {
       "parameters": {
+        "method": "GET",
         "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/shared/references/COMPANY_ASSETS.md",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "text"
-            }
-          }
-        }
+        "responseFormat": "string",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -82,7 +103,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rules = $items('Fetch RULES.md')[0]?.json?.body ?? ''\nconst outputFormat = $items('Fetch OUTPUT_FORMAT.md')[0]?.json?.body ?? ''\nconst assets = $items('Fetch COMPANY_ASSETS.md')[0]?.json?.body ?? ''\n\nconst chatTriggerItem = $items('When chat message received')[0]?.json ?? {}\nconst chatInput = chatTriggerItem.chatInput ?? chatTriggerItem.message ?? chatTriggerItem.text ?? ''\n\nconst system = [\n  'You are a presentation-building agent embedded in n8n.',\n  '',\n  'You have exactly two tools (skills):',\n  '1) Ad_Board_Presentation: use for OOH/DOOH, billboards, transit, signage, retail boards.',\n  '2) Marketing_Presentation: use for marketing strategy, GTM, campaign plans, pitch decks.',\n  '',\n  'Tool choice policy:',\n  '- If the user mentions ad boards/billboards/OOH/placements/specs/short-copy/legibility: call Ad_Board_Presentation.',\n  '- If the user mentions marketing strategy/channels/budget/KPIs/timeline/plan: call Marketing_Presentation.',\n  '- If unclear: ask up to 3 clarifying questions, then proceed.',\n  '',\n  '---',\n  '## RULES',\n  rules,\n  '',\n  '---',\n  '## OUTPUT_FORMAT',\n  outputFormat,\n  '',\n  '---',\n  '## COMPANY_ASSETS',\n  assets,\n].join('\\n')\n\nreturn [{ json: { chatInput, agentSystemMessage: system } }]\n"
+        "jsCode": "function extractBody(nodeName) {\n  const nodeJson = $items(nodeName)[0]?.json ?? {};\n  return nodeJson.body ?? nodeJson.data ?? nodeJson.response ?? '';\n}\n\nconst rules = extractBody('Fetch RULES.md');\nconst outputFormat = extractBody('Fetch OUTPUT_FORMAT.md');\nconst assets = extractBody('Fetch COMPANY_ASSETS.md');\n\nconst routeJson = $items('Route intent')[0]?.json ?? {};\nconst chatInput = (routeJson.chatInput ?? '').trim();\n\nconst system = [\n  'You are a helpful assistant embedded in n8n.',\n  'Chat normally with the user.',\n  '',\n  'You have exactly two tools (skills) available for presentation-building ONLY:',\n  '1) Ad_Board_Presentation: use for OOH/DOOH, billboards, transit, signage, retail boards.',\n  '2) Marketing_Presentation: use for marketing strategy, GTM, campaign plans, pitch decks.',\n  '',\n  'Tool usage policy:',\n  '- If the user is NOT asking to create a presentation/deck/slide outline, answer normally WITHOUT calling any tool.',\n  '- If the user IS asking to create a presentation/deck/slide outline, call exactly one tool that matches:',\n  '  - OOH/ad board/billboard/placements/specs/short-copy/legibility => Ad_Board_Presentation',\n  '  - marketing strategy/channels/budget/KPIs/timeline/plan/pitch deck => Marketing_Presentation',\n  '- If unclear, ask up to 3 clarifying questions, then proceed.',\n  '',\n  '---',\n  '## RULES',\n  rules,\n  '',\n  '---',\n  '## OUTPUT_FORMAT',\n  outputFormat,\n  '',\n  '---',\n  '## COMPANY_ASSETS',\n  assets,\n].join('\\n');\n\nreturn [{ json: { chatInput, agentSystemMessage: system } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -92,6 +113,22 @@
       ],
       "id": "d4444444-5555-4666-8777-888888888888",
       "name": "Build system message"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "You are a helpful assistant embedded in n8n.\n\nChat normally with the user.\n\nIf the user wants a presentation/deck/slides, ask them to explicitly say so (e.g., \"Make a marketing presentation about...\" or \"Make an OOH/ad board presentation about...\")."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        160,
+        -220
+      ],
+      "id": "cc333333-dddd-4eee-8fff-000000000000",
+      "name": "AI Agent (chat)"
     },
     {
       "parameters": {
@@ -139,7 +176,7 @@
         0
       ],
       "id": "0a0b0c0d-1111-4222-8333-444444444444",
-      "name": "AI Agent"
+      "name": "AI Agent (presentations)"
     },
     {
       "parameters": {
@@ -177,7 +214,36 @@
       "main": [
         [
           {
+            "node": "Route intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route intent": {
+      "main": [
+        [
+          {
+            "node": "Presentation requested?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Presentation requested?": {
+      "main": [
+        [
+          {
             "node": "Fetch RULES.md",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent (chat)",
             "type": "main",
             "index": 0
           }
@@ -221,7 +287,7 @@
       "main": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent (presentations)",
             "type": "main",
             "index": 0
           }
@@ -232,7 +298,12 @@
       "ai_languageModel": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent (presentations)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent (chat)",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -243,7 +314,12 @@
       "ai_memory": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent (presentations)",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "AI Agent (chat)",
             "type": "ai_memory",
             "index": 0
           }
@@ -254,7 +330,7 @@
       "ai_tool": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent (presentations)",
             "type": "ai_tool",
             "index": 0
           }
@@ -265,14 +341,19 @@
       "ai_tool": [
         [
           {
-            "node": "AI Agent",
+            "node": "AI Agent (presentations)",
             "type": "ai_tool",
             "index": 1
           }
         ]
       ]
     },
-    "AI Agent": {
+    "AI Agent (presentations)": {
+      "main": [
+        []
+      ]
+    },
+    "AI Agent (chat)": {
       "main": [
         []
       ]
