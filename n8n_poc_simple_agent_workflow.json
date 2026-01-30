@@ -1,0 +1,282 @@
+{
+  "name": "POC Chat Presentation Agent (2 tools + fixed GitHub docs)",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "initialMessages": "Hi! Describe what you need (OOH/ad board or marketing deck) and I’ll generate a slide outline."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -780,
+        0
+      ],
+      "id": "f1b2c3d4-e5f6-4a1b-9c8d-0e1f2a3b4c5d",
+      "name": "When chat message received",
+      "webhookId": "poc_chat_presentation_agent"
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/marketing-presentation-skill/references/RULES.md",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -540,
+        0
+      ],
+      "id": "a1111111-2222-4333-8444-555555555555",
+      "name": "Fetch RULES.md"
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/marketing-presentation-skill/references/OUTPUT_FORMAT.md",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -320,
+        0
+      ],
+      "id": "b2222222-3333-4444-8555-666666666666",
+      "name": "Fetch OUTPUT_FORMAT.md"
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/pedromsousalll/testsn8n/main/shared/references/COMPANY_ASSETS.md",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "c3333333-4444-4555-8666-777777777777",
+      "name": "Fetch COMPANY_ASSETS.md"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rules = $items('Fetch RULES.md')[0]?.json?.body ?? ''\nconst outputFormat = $items('Fetch OUTPUT_FORMAT.md')[0]?.json?.body ?? ''\nconst assets = $items('Fetch COMPANY_ASSETS.md')[0]?.json?.body ?? ''\n\nconst system = [\n  'You are a presentation-building agent embedded in n8n.',\n  '',\n  'You have exactly two tools (skills):',\n  '1) Ad_Board_Presentation: use for OOH/DOOH, billboards, transit, signage, retail boards.',\n  '2) Marketing_Presentation: use for marketing strategy, GTM, campaign plans, pitch decks.',\n  '',\n  'Tool choice policy:',\n  '- If the user mentions ad boards/billboards/OOH/placements/specs/short-copy/legibility: call Ad_Board_Presentation.',\n  '- If the user mentions marketing strategy/channels/budget/KPIs/timeline/plan: call Marketing_Presentation.',\n  '- If unclear: ask up to 3 clarifying questions, then proceed.',\n  '',\n  '---',\n  '## RULES',\n  rules,\n  '',\n  '---',\n  '## OUTPUT_FORMAT',\n  outputFormat,\n  '',\n  '---',\n  '## COMPANY_ASSETS',\n  assets,\n].join('\\n')\n\nreturn items.map(item => ({ json: { ...item.json, agentSystemMessage: system } }))\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        0
+      ],
+      "id": "d4444444-5555-4666-8777-888888888888",
+      "name": "Build system message"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "responsesApiEnabled": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        360,
+        220
+      ],
+      "id": "e5555555-6666-4777-9888-999999999999",
+      "name": "OpenAI Model",
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        560,
+        220
+      ],
+      "id": "f6666666-7777-4888-a999-aaaaaaaaaaaa",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "={{ $json.agentSystemMessage }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        360,
+        0
+      ],
+      "id": "0a0b0c0d-1111-4222-8333-444444444444",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "description": "Generate an OOH/ad-board presentation outline (OOH/DOOH, billboards, transit, signage, retail boards). Input should be a compact brief: product/offer, locations/placements, dates/flighting, audience context, constraints/specs.",
+        "language": "javaScript",
+        "jsCode": "const input = typeof query === 'string' ? query : JSON.stringify(query);\n\nfunction section(title, bullets) {\n  return `## ${title}\\n${bullets.map(b => `- ${b}`).join('\\n')}`;\n}\n\nconst slides = [\n  { t: 'Slide 1 — Title / Campaign Snapshot', b: ['Campaign name + one-line promise', 'Offer + dates', 'Primary locations/placements', 'Primary KPI'] },\n  { t: 'Slide 2 — Objective & Audience', b: ['Objective', 'Primary audience + context', 'Key insight', 'Desired next action'] },\n  { t: 'Slide 3 — Message Strategy (3-second rule)', b: ['Core message (<= 7 words)', 'Supporting line (optional)', 'CTA (QR/URL/store)', 'Legibility notes'] },\n  { t: 'Slide 4 — Concepts (A/B/C)', b: ['Concept A: headline + visual + CTA', 'Concept B: headline + visual + CTA', 'Concept C: headline + visual + CTA', 'When to use each'] },\n  { t: 'Slide 5 — Placement & Flighting', b: ['Formats (static/DOOH/transit/retail)', 'Rotation/dayparting (if DOOH)', 'Geo rationale', 'Approvals/spec dependencies'] },\n  { t: 'Slide 6 — Measurement + Next Steps', b: ['Measurement plan', 'Reporting cadence', 'Assets checklist', 'Next steps'] },\n];\n\nlet out = `You asked for an ad-board presentation.\\n\\nBrief received:\\n${input}\\n\\n`;\nfor (const s of slides) {\n  out += section(s.t, s.b) + '\\n\\n';\n  out += 'Speaker notes: Keep copy punchy and readable at distance. Confirm specs with media owner.\\n\\n';\n}\nreturn out;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        760,
+        -80
+      ],
+      "id": "11111111-2222-4333-8444-555555555556",
+      "name": "Ad_Board_Presentation"
+    },
+    {
+      "parameters": {
+        "description": "Generate a marketing presentation outline (strategy/GTM/campaign plan/pitch). Input should be a compact brief: product, audience, goals, constraints, channels, timeline, KPIs.",
+        "language": "javaScript",
+        "jsCode": "const input = typeof query === 'string' ? query : JSON.stringify(query);\n\nfunction section(title, bullets) {\n  return `## ${title}\\n${bullets.map(b => `- ${b}`).join('\\n')}`;\n}\n\nconst slides = [\n  { t: 'Slide 1 — Title / Exec Summary', b: ['What we are proposing', 'Who it is for', 'Timeframe', 'Single key outcome'] },\n  { t: 'Slide 2 — Context & Problem', b: ['Context', 'Problem/opportunity', 'Why now'] },\n  { t: 'Slide 3 — Audience & Insight', b: ['Segments', 'Key insight', 'Barriers/motivators'] },\n  { t: 'Slide 4 — Positioning & Messaging', b: ['Value prop', '3 message pillars', 'Proof points', 'CTA/offer'] },\n  { t: 'Slide 5 — Plan & Channel Mix', b: ['Approach', 'Channels + rationale', 'Experiments', 'Risks/assumptions'] },\n  { t: 'Slide 6 — Timeline & KPIs', b: ['Milestones', 'North-star metric + KPIs', 'Reporting cadence', 'Next steps'] },\n];\n\nlet out = `You asked for a marketing presentation.\\n\\nBrief received:\\n${input}\\n\\n`;\nfor (const s of slides) {\n  out += section(s.t, s.b) + '\\n\\n';\n  out += 'Speaker notes: Keep it decision-oriented and measurable. Label assumptions.\\n\\n';\n}\nreturn out;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        760,
+        80
+      ],
+      "id": "22222222-3333-4444-8555-666666666667",
+      "name": "Marketing_Presentation"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Fetch RULES.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RULES.md": {
+      "main": [
+        [
+          {
+            "node": "Fetch OUTPUT_FORMAT.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OUTPUT_FORMAT.md": {
+      "main": [
+        [
+          {
+            "node": "Fetch COMPANY_ASSETS.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch COMPANY_ASSETS.md": {
+      "main": [
+        [
+          {
+            "node": "Build system message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build system message": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ad_Board_Presentation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marketing_Presentation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false
+}
